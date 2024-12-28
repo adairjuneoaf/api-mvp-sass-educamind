@@ -1,0 +1,11 @@
+# Ignore artifacts:
+build
+coverage
+prisma
+
+node_modules
+dist
+dist-ssr
+*.local
+.vscode/*
+.env
