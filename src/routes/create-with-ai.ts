@@ -1,8 +1,9 @@
+import { streamText } from 'ai';
 import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { prisma } from '../db/prisma';
-import { openai } from '../lib/openai';
+import { chat } from '../lib/openai';
 
 export const createWithAi = async (app: FastifyInstance) => {
   app.post('/videos/:videoId/create', async (req, res) => {
@@ -13,7 +14,7 @@ export const createWithAi = async (app: FastifyInstance) => {
     });
 
     const bodySchema = z.object({
-      templatePrompt: z.string(),
+      prompt: z.string(),
       temperature: z
         .number({ message: 'Must be a Number.' })
         .min(0, { message: 'Min value is 0.' })
@@ -23,7 +24,7 @@ export const createWithAi = async (app: FastifyInstance) => {
     });
 
     const { videoId } = paramsSchema.parse(params);
-    const { temperature, templatePrompt } = bodySchema.parse(body);
+    const { temperature, prompt } = bodySchema.parse(body);
 
     if (!videoId) {
       return res.status(400).send({ error: 'Please send a video id to create transcription.' });
@@ -39,31 +40,19 @@ export const createWithAi = async (app: FastifyInstance) => {
       return res.status(400).send({ error: 'Video transcription was not generated yet.' });
     }
 
-    const promptMessage = templatePrompt.replace('{transcription}', video.transcription);
+    const promptMessage = prompt.replace('{transcription}', video.transcription);
 
-    const aiChatReturn = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo-16k',
+    const aiChatReturn = streamText({
+      model: chat('gpt-3.5-turbo'),
       temperature,
-      messages: [
-        {
-          role: 'developer',
-          content:
-            'Você é um chatbot para ajudar pessoas na geração de textos baseados em transcrições de conteúdos sobre tecnologia e programação.',
-        },
-        {
-          role: 'developer',
-          content:
-            'Os conteúdos são gravados ou escritos por pessoas que entendem do assunto que está transcrito para que você possa utilizar.',
-        },
-        {
-          role: 'developer',
-          content:
-            'Sempre se comporte como você sendo especialista nos assuntos. Não diga em terceira pessoa, citando como autor, desenvolvedor, escritor, palestrante ou algo do gênero.',
-        },
-        { role: 'user', content: promptMessage },
-      ],
+      messages: [{ role: 'user', content: promptMessage }],
     });
 
-    return res.status(200).send({ content: aiChatReturn });
+    res.header('X-Vercel-AI-Data-Stream', 'v1');
+    res.header('content-type', 'text/plain; charset=utf-8');
+    res.header('Cache-Control', 'no-cache');
+    res.header('Access-Control-Allow-Methods', 'POST');
+
+    return res.send(aiChatReturn.textStream);
   });
 };
