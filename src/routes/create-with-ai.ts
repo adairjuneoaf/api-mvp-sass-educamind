@@ -5,7 +5,7 @@ import { prisma } from '../db/prisma';
 import { openai } from '../lib/openai';
 
 export const createWithAi = async (app: FastifyInstance) => {
-  app.post('/video/:videoId/create', async (req, res) => {
+  app.post('/videos/:videoId/create', async (req, res) => {
     const { body, params } = req;
 
     const paramsSchema = z.object({
